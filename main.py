@@ -11,40 +11,12 @@ from azure.core.exceptions import ResourceNotFoundError
 
 auth_email = os.environ['auth_contact_email']
 
-# tags_metadata = [
-#     {
-#         "name": "wzdx-list",
-#         "description": "To query based on location, set both the center (lat,long) and distance(in km) as query parameters",
-#     },
-#     {
-#         "name": "wzdx-file",
-#         "description": "Download a wzdx file by name",
-#     },
-#     {
-#         "name": "xml-list",
-#         "description": "To query based on location, set both the center (lat,long) and distance(in km) as query parameters",
-#     },
-#     {
-#         "name": "xml-file",
-#         "description": "Download RSM xml files by name",
-#     },
-#     {
-#         "name": "uper-list",
-#         "description": "To query based on location, set both the center (lat,long) and distance(in km) as query parameters",
-#     },
-#     {
-#         "name": "uper-file",
-#         "description": "Download RSM uper files by name",
-#     },
-# ]
-
 app = FastAPI(
     title="Work Zone Data Collection Tool Rest API",
-    description="This API hosts work zone data collected by the WZDC " +
-    "(work zone data collection) tool. This data includes RSM messages, both in xml and uper (binary) formats. This API " +
-    f"requires an APi key in the header. Contact {auth_email} for more information on how to acquire and use an API key.",
+    description='This API hosts work zone data collected by the WZDC ' +
+    '(work zone data collection) tool. This data includes RSM messages, both in xml and uper (binary) formats. This API ' +
+    f'requires an APi key in the header. Contact <a href="mailto: {auth_email}">{auth_email}</a> for more information on how to acquire and use an API key.',
     docs_url="/",
-    # openapi_tags=tags_metadata
 )
 
 storage_conn_str = os.environ['storage_connection_string']
@@ -64,19 +36,19 @@ container_name = os.environ['source_container_name']
 file_types_dict = {
     'rsm-xml': {
         'subdir': 'rsm-xml',
-        'list_endpoint': 'rsm/xml-list',
+        'list_endpoint': 'rsm-xml',
         'name_prefix': 'rsm-xml',
         'file_type': 'xml'
     },
     'rsm-uper': {
         'subdir': 'rsm-uper',
-        'list_endpoint': 'rsm/uper-list',
+        'list_endpoint': 'rsm-uper',
         'name_prefix': 'rsm-uper',
         'file_type': 'uper'
     },
     'wzdx': {
         'subdir': 'wzdx',
-        'list_endpoint': 'wzdx/list',
+        'list_endpoint': 'wzdx',
         'name_prefix': 'wzdx',
         'file_type': 'geojson'
     }
@@ -88,7 +60,7 @@ def get_wzdx_files_list(request: Request,
                         center: str = Query('', title='Center', description='Center of query location, in the format "lat,long"',
                                             regex='^(-?\\d+(\\.\\d+)?),\\s*(-?\\d+(\\.\\d+)?)$'),
                         distance: float = Query(
-                            0, title='Distance', description='Maximum distance from center location'),
+                            0, title='Distance', description='Maximum distance (in km) from center location'),
                         county: str = Query(
                             None, title='County', description='County'),
                         state: str = Query(
@@ -122,7 +94,7 @@ def get_wzdx_files_list(request: Request,
     elif county or state or zip_code:
         return getFilesByMetadata(file_type, container_name, location_params)
     else:
-        return getFilesByType('wzdx', container_name)
+        return getFilesByType(file_type, container_name)
 
 
 @app.get("/wzdx/{file_name}", tags=["wzdx-file"])
@@ -142,7 +114,7 @@ def get_rsm_files_list_location_filter(request: Request,
                                        center: str = Query('', title='Center', description='Center of query location, in the format: lat,long',
                                                            regex='^(-?\\d+(\\.\\d+)?),\\s*(-?\\d+(\\.\\d+)?)$'),
                                        distance: float = Query(
-                                           0, title='Distance', description='Maximum distance from center location'),
+                                           0, title='Distance', description='Maximum distance (in km) from center location'),
                                        county: str = Query(
                                            None, title='County', description='County'),
                                        state: str = Query(
@@ -176,7 +148,7 @@ def get_rsm_files_list_location_filter(request: Request,
     elif county or state or zip_code:
         return getFilesByMetadata(file_type, container_name, location_params)
     else:
-        return getFilesByType('wzdx', container_name)
+        return getFilesByType(file_type, container_name)
 
 
 @app.get("/rsm-xml/{file_name}", tags=["xml-file"])
@@ -196,7 +168,7 @@ def get_rsm_uper_files_list(request: Request,
                             center: str = Query('', title='Center', description='Center of query location, in the format: lat,long',
                                                 regex='^(-?\\d+(\\.\\d+)?),\\s*(-?\\d+(\\.\\d+)?)$'),
                             distance: float = Query(
-                                0, title='Distance', description='Maximum distance from center location'),
+                                0, title='Distance', description='Maximum distance (in km) from center location'),
                             county: str = Query(
                                 None, title='County', description='County'),
                             state: str = Query(
@@ -230,7 +202,7 @@ def get_rsm_uper_files_list(request: Request,
     elif county or state or zip_code:
         return getFilesByMetadata(file_type, container_name, location_params)
     else:
-        return getFilesByType('wzdx', container_name)
+        return getFilesByType(file_type, container_name)
 
 
 @app.get("/rsm-uper/{rsm_name}", tags=["uper-file"])
@@ -322,12 +294,15 @@ def getWZId(file_type, name):
 
     begin_str = '{:s}--'.format(type_values['name_prefix'])
     end_str = '--1-of-1.{:s}'.format(type_values['file_type'])
+    alt_end_str = '.{:s}'.format(type_values['file_type'])
 
     name = name.split('/')[-1]
     if name.startswith(begin_str):
         name = name[len(begin_str):]
     if name.endswith(end_str):
         name = name[:-len(end_str)]
+    elif name.endswith(alt_end_str):
+        name = name[:-len(alt_end_str)]
     return name
 
 
@@ -365,8 +340,14 @@ def getFilesListByName(file_type, rsm_name, container_name):
     type_values = file_types_dict[file_type]
     name_beginning = '{0}/{1}--{2}'.format(
         type_values['subdir'], type_values['name_prefix'], rsm_name)
-    initial_blob_name = '{0}--1-of-1.{1}'.format(
-        name_beginning, type_values['file_type'])
+
+    # For RSM files, multiple files can exist for a single work zone. Thus, these files have --i-of-N at the end of the name
+    if file_type == 'rsm-xml' or file_type == 'rsm-uper':
+        initial_blob_name = '{0}--1-of-1.{1}'.format(
+            name_beginning, type_values['file_type'])
+    else:
+        initial_blob_name = '{0}.{1}'.format(
+            name_beginning, type_values['file_type'])
 
     blob_client = blob_service_client.get_blob_client(
         container=container_name, blob=initial_blob_name)
