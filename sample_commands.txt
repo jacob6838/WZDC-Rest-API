@@ -1,0 +1,4 @@
+python -m uvicorn main:app --reload
+
+$response = Invoke-WebRequest 'http://127.0.0.1:8000/rsm/xml-list/?center=40.061336,-105.212715&distance=10' -Headers @{"auth_key"=""}; $response.Content
+

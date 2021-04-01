@@ -1,0 +1,8 @@
+azure-storage-blob
+fastapi
+pyodbc
+azure-core
+gunicorn
+uvicorn
+uvloop
+httptools
